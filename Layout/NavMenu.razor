@@ -1,0 +1,89 @@
+<div class="top-row navbar">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">
+            <span class="brand-mark">M</span>
+            <span class="brand-text">Admin</span>
+        </a>
+        <button title="Menu" class="navbar-toggler" @onclick="ToggleNavMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </div>
+</div>
+
+<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
+    <nav class="nav flex-column">
+        <div class="nav-section">Pilotage</div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="nav-ico" aria-hidden="true"></span> Vue d'ensemble
+            </NavLink>
+        </div>
+
+        <div class="nav-section">Gouvernance</div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="vendeurs"><span class="nav-ico" aria-hidden="true"></span> Vendeurs &amp; KYB</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="utilisateurs"><span class="nav-ico" aria-hidden="true"></span> Utilisateurs</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="roles"><span class="nav-ico" aria-hidden="true"></span> Rôles</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="moderation"><span class="nav-ico" aria-hidden="true"></span> Modération</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="litiges"><span class="nav-ico" aria-hidden="true"></span> Litiges</NavLink>
+        </div>
+
+        <div class="nav-section">Opérations</div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="commandes"><span class="nav-ico" aria-hidden="true"></span> Commandes</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="produits"><span class="nav-ico" aria-hidden="true"></span> Produits</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="paiements"><span class="nav-ico" aria-hidden="true"></span> Paiements</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="finances"><span class="nav-ico" aria-hidden="true"></span> Finances</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="catalogue"><span class="nav-ico" aria-hidden="true"></span> Catalogue</NavLink>
+        </div>
+
+        <div class="nav-section">Croissance &amp; contenu</div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="marketing"><span class="nav-ico" aria-hidden="true"></span> Marketing</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="cms"><span class="nav-ico" aria-hidden="true"></span> CMS</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="analytics"><span class="nav-ico" aria-hidden="true"></span> Analytics</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="notifications"><span class="nav-ico" aria-hidden="true"></span> Notifications</NavLink>
+        </div>
+
+        <div class="nav-section">Configuration</div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="taxes"><span class="nav-ico" aria-hidden="true"></span> Taxes</NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="plateforme"><span class="nav-ico" aria-hidden="true"></span> Plateforme</NavLink>
+        </div>
+
+        <div class="nav-section">Système</div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="profil"><span class="nav-ico" aria-hidden="true"></span> Mon compte</NavLink>
+        </div>
+    </nav>
+</div>
+
+@code {
+    private bool collapseNavMenu = true;
+    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private void ToggleNavMenu() => collapseNavMenu = !collapseNavMenu;
+}

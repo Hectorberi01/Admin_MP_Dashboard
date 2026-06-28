@@ -1,0 +1,86 @@
+@page "/paiements"
+@inject IAdminApi Api
+
+<PageTitle>Paiements — Console Admin</PageTitle>
+
+<PageHeader Title="Paiements &amp; reversements" Subtitle="Flux de paiement et payouts vendeurs de la plateforme." />
+
+@if (loadError is not null) { <ErrorNotice Title="Données indisponibles" Message="@loadError" OnRetry="Reload" /> }
+
+<MpCard Title="Paiements" NoPadding="true">
+    <ChildContent>
+        @if (payments is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else if (payments.Count == 0) { <p class="mp-caption mp-pad">Aucun paiement.</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Commande</th><th class="num">Montant</th><th>Méthode</th><th>PSP</th><th>Statut</th><th>Date</th></tr></thead>
+                <tbody>
+                    @foreach (var p in payments)
+                    {
+                        <tr>
+                            <td class="mp-num">@Short(p.OrderId)</td>
+                            <td class="num mp-num mp-body-strong">@p.Amount.ToString("0") @p.Currency</td>
+                            <td>@p.Method</td>
+                            <td>@p.Provider</td>
+                            <td><MpBadge Variant="@(p.Status == "Captured" ? BadgeVariant.Verified : p.Status == "Failed" ? BadgeVariant.Rupture : BadgeVariant.Neutral)">@p.Status</MpBadge></td>
+                            <td class="mp-num">@p.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<MpCard Title="Reversements (payouts)" NoPadding="true">
+    <ChildContent>
+        @if (payouts is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else if (payouts.Count == 0) { <p class="mp-caption mp-pad">Aucun reversement.</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Vendeur</th><th class="num">Brut</th><th class="num">Commission</th><th class="num">Net</th><th>Statut</th><th>Réf.</th></tr></thead>
+                <tbody>
+                    @foreach (var po in payouts)
+                    {
+                        <tr>
+                            <td class="mp-num">@Short(po.SellerId)</td>
+                            <td class="num mp-num">@po.GrossAmount.ToString("0")</td>
+                            <td class="num mp-num">@po.CommissionAmount.ToString("0")</td>
+                            <td class="num mp-num mp-body-strong">@po.NetAmount.ToString("0") @po.Currency</td>
+                            <td><MpBadge Variant="@(po.Status == "Paid" ? BadgeVariant.Verified : BadgeVariant.Neutral)">@po.Status</MpBadge></td>
+                            <td class="mp-num">@(po.ProviderRef ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<style>
+    .mp-pad { padding: var(--mp-space-4); }
+</style>
+
+@code {
+    private IReadOnlyList<AdminPayment>? payments;
+    private List<SettlementPayout>? payouts;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; payments = null; payouts = null;
+        try
+        {
+            payments = await Api.ListPaymentsAsync();
+            var batches = await Api.ListBatchesAsync();
+            payouts = batches.SelectMany(b => b.Payouts).ToList();
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private static string Short(Guid id) => id.ToString("N")[..8].ToUpperInvariant();
+}

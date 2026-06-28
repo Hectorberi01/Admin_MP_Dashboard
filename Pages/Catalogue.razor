@@ -1,0 +1,204 @@
+@page "/catalogue"
+@inject IAdminApi Api
+
+<PageTitle>Catalogue — Console Admin</PageTitle>
+
+<PageHeader Title="Catalogue" Subtitle="Taxonomie (catégories) et marques de la plateforme.">
+    <Actions>
+        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => _showCatModal = true)">＋ Catégorie</MpButton>
+        <MpButton Variant="ButtonVariant.Action" OnClick="@(() => _showBrandModal = true)">＋ Marque</MpButton>
+    </Actions>
+</PageHeader>
+
+@if (_msg is not null) { <p class="ok-msg">@_msg</p> }
+@if (_err is not null) { <p class="login-error">@_err</p> }
+
+<MpCard Title="Catégories de la plateforme" NoPadding="true">
+    <ChildContent>
+        @if (categories is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else if (categories.Count == 0) { <p class="mp-caption mp-pad">Aucune catégorie. Cliquez sur « ＋ Catégorie ».</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Catégorie</th><th>Chemin</th><th>Statut</th><th class="actions-col">Actions</th></tr></thead>
+                <tbody>
+                    @foreach (var c in categories)
+                    {
+                        <tr>
+                            <td class="cell-strong">@c.Name</td>
+                            <td class="mp-caption">@c.Path</td>
+                            <td><MpBadge Variant="@StatusVariant(c.Status)">@StatusLabel(c.Status)</MpBadge></td>
+                            <td class="actions-col">
+                                <div class="row-actions">
+                                    @if (!IsPublished(c.Status))
+                                    {
+                                        <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Act(() => Api.PublishCategoryAsync(c.Id), "Catégorie publiée."))">Publier</MpButton>
+                                    }
+                                    else
+                                    {
+                                        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Act(() => Api.UnpublishCategoryAsync(c.Id), "Catégorie dépubliée."))">Dépublier</MpButton>
+                                    }
+                                    <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Act(() => Api.DeleteCategoryAsync(c.Id), "Catégorie supprimée."))">Supprimer</MpButton>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<div class="table-gap"></div>
+
+<MpCard Title="Marques de la plateforme" NoPadding="true">
+    <ChildContent>
+        @if (brands is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else if (brands.Count == 0) { <p class="mp-caption mp-pad">Aucune marque. Cliquez sur « ＋ Marque ».</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Marque</th><th>Slug</th><th>Statut</th><th class="actions-col">Actions</th></tr></thead>
+                <tbody>
+                    @foreach (var b in brands)
+                    {
+                        <tr>
+                            <td class="cell-strong">@b.Name</td>
+                            <td class="mp-caption">@b.Slug</td>
+                            <td><MpBadge Variant="@StatusVariant(b.Status)">@StatusLabel(b.Status)</MpBadge></td>
+                            <td class="actions-col">
+                                <div class="row-actions">
+                                    @if (!IsPublished(b.Status))
+                                    {
+                                        <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Act(() => Api.PublishBrandAsync(b.Id), "Marque publiée."))">Publier</MpButton>
+                                    }
+                                    else
+                                    {
+                                        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Act(() => Api.UnpublishBrandAsync(b.Id), "Marque dépubliée."))">Dépublier</MpButton>
+                                    }
+                                    <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Act(() => Api.DeleteBrandAsync(b.Id), "Marque supprimée."))">Supprimer</MpButton>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<MpModal @bind-Visible="_showCatModal" Title="Nouvelle catégorie">
+    <ChildContent>
+        <div class="form-grid">
+            <label>Nom <input class="mp-input" @bind="_catName" /></label>
+            <label>Catégorie parent (optionnel)
+                <select class="mp-input" @bind="_catParent">
+                    <option value="">— racine (aucun parent) —</option>
+                    @if (categories is not null)
+                    {
+                        @foreach (var c in categories)
+                        {
+                            <option value="@c.Id">@c.Path</option>
+                        }
+                    }
+                </select>
+            </label>
+            <label>Image URL (optionnel) <input class="mp-input" @bind="_catImage" /></label>
+        </div>
+    </ChildContent>
+    <Footer>
+        <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => _showCatModal = false)">Annuler</MpButton>
+        <MpButton Variant="ButtonVariant.Primary" OnClick="CreateCategory">Créer la catégorie</MpButton>
+    </Footer>
+</MpModal>
+
+<MpModal @bind-Visible="_showBrandModal" Title="Nouvelle marque">
+    <ChildContent>
+        <div class="form-grid">
+            <label>Nom <input class="mp-input" @bind="_brandName" /></label>
+            <label>Logo URL (optionnel) <input class="mp-input" @bind="_brandLogo" /></label>
+            <label>Description (optionnel) <input class="mp-input" @bind="_brandDesc" /></label>
+        </div>
+    </ChildContent>
+    <Footer>
+        <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => _showBrandModal = false)">Annuler</MpButton>
+        <MpButton Variant="ButtonVariant.Primary" OnClick="CreateBrand">Créer la marque</MpButton>
+    </Footer>
+</MpModal>
+
+<style>
+    .row-actions { display: flex; gap: var(--mp-space-2); }
+    .mp-pad { padding: var(--mp-space-4); }
+    .table-gap { height: var(--mp-space-4); }
+    .ok-msg { color: var(--mp-success, #1a7f37); margin-bottom: var(--mp-space-3); }
+    .form-grid { display: flex; flex-direction: column; gap: var(--mp-space-3); }
+    .form-grid label { display: flex; flex-direction: column; gap: var(--mp-space-1); font-size: .85rem; }
+</style>
+
+@code {
+    private string _catName = "", _catParent = "", _catImage = "";
+    private string _brandName = "", _brandLogo = "", _brandDesc = "";
+    private bool _showCatModal, _showBrandModal;
+    private string? _msg, _err;
+    private IReadOnlyList<AdminCategory>? categories;
+    private IReadOnlyList<AdminBrand>? brands;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+        await LoadBrands();
+    }
+
+    private async Task LoadCategories()
+    {
+        try { categories = await Api.ListCategoriesAsync(); }
+        catch (Exception ex) { _err = ex.Message; categories = Array.Empty<AdminCategory>(); }
+    }
+
+    private async Task LoadBrands()
+    {
+        try { brands = await Api.ListBrandsAsync(); }
+        catch (Exception ex) { _err = ex.Message; brands = Array.Empty<AdminBrand>(); }
+    }
+
+    private async Task CreateCategory()
+    {
+        Reset();
+        try
+        {
+            Guid? parent = Guid.TryParse(_catParent, out var p) ? p : null;
+            await Api.CreateCategoryAsync(new CategoryRequest(_catName, parent, NullIfEmpty(_catImage), null));
+            _msg = "Catégorie créée.";
+            _catName = _catImage = ""; _catParent = ""; _showCatModal = false;
+            await LoadCategories();
+        }
+        catch (Exception ex) { _err = ex.Message; }
+    }
+
+    private async Task CreateBrand()
+    {
+        Reset();
+        try
+        {
+            await Api.CreateBrandAsync(new BrandRequest(_brandName, NullIfEmpty(_brandLogo), NullIfEmpty(_brandDesc)));
+            _msg = "Marque créée.";
+            _brandName = _brandLogo = _brandDesc = ""; _showBrandModal = false;
+            await LoadBrands();
+        }
+        catch (Exception ex) { _err = ex.Message; }
+    }
+
+    private async Task Act(Func<Task> action, string okMsg)
+    {
+        Reset();
+        try { await action(); _msg = okMsg; await LoadCategories(); await LoadBrands(); }
+        catch (Exception ex) { _err = ex.Message; }
+    }
+
+    private static bool IsPublished(string s) => s.Equals("Published", StringComparison.OrdinalIgnoreCase) || s.Equals("Active", StringComparison.OrdinalIgnoreCase);
+    private static BadgeVariant StatusVariant(string s) => IsPublished(s) ? BadgeVariant.Verified : s.Equals("Archived", StringComparison.OrdinalIgnoreCase) ? BadgeVariant.Rupture : BadgeVariant.Neutral;
+    private static string StatusLabel(string s) => IsPublished(s) ? "Publiée" : s.Equals("Archived", StringComparison.OrdinalIgnoreCase) ? "Archivée" : "Brouillon";
+
+    private void Reset() { _msg = null; _err = null; }
+    private static string? NullIfEmpty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
+}

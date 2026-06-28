@@ -1,0 +1,173 @@
+@page "/moderation"
+@inject IAdminApi Api
+
+<PageTitle>Modération — Console Admin</PageTitle>
+
+<PageHeader Title="Modération" Subtitle="Avis et litiges. Recherchez un produit ou une commande pour charger les éléments à modérer." />
+
+<div class="mod-grid">
+    <MpCard Title="Avis d'un produit">
+        <ChildContent>
+            <div class="picker">
+                <input class="mp-input" placeholder="Rechercher un produit par nom…" @bind="_productFilter" @bind:event="oninput" @onfocus="@(() => _productOpen = true)" />
+                @if (_productOpen && products is not null)
+                {
+                    var matches = products.Where(p => string.IsNullOrWhiteSpace(_productFilter) || p.Name.Contains(_productFilter, StringComparison.OrdinalIgnoreCase) || p.Slug.Contains(_productFilter, StringComparison.OrdinalIgnoreCase)).Take(8).ToList();
+                    <div class="picker-list">
+                        @if (matches.Count == 0) { <div class="picker-empty">Aucun produit</div> }
+                        @foreach (var p in matches)
+                        {
+                            <button type="button" class="picker-item" @onclick="@(() => SelectProduct(p))">
+                                <span class="cell-strong">@p.Name</span>
+                                <span class="mp-caption">@p.Slug · @p.Status</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            @if (_selectedProduct is not null) { <p class="picked">Produit : <strong>@_selectedProduct.Name</strong></p> }
+            @if (_reviewError is not null) { <p class="login-error">@_reviewError</p> }
+            @if (reviews is not null)
+            {
+                @if (reviews.Count == 0) { <p class="mp-caption">Aucun avis pour ce produit.</p> }
+                else
+                {
+                    <div class="recent-list">
+                        @foreach (var r in reviews)
+                        {
+                            <div class="mod-row">
+                                <div>
+                                    <strong>@r.Title</strong> <span class="mp-caption">★ @r.Rating · @r.Status</span>
+                                    <div class="mp-caption">@r.Body</div>
+                                </div>
+                                <div class="row-actions">
+                                    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.FlagReviewAsync(r.Id)))">Signaler</MpButton>
+                                    <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.RejectReviewAsync(r.Id)))">Rejeter</MpButton>
+                                    <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => Do(() => Api.RestoreReviewAsync(r.Id)))">Restaurer</MpButton>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </ChildContent>
+    </MpCard>
+
+    <MpCard Title="Litiges d'une commande">
+        <ChildContent>
+            <div class="picker">
+                <input class="mp-input" placeholder="Rechercher une commande par référence…" @bind="_orderFilter" @bind:event="oninput" @onfocus="@(() => _orderOpen = true)" />
+                @if (_orderOpen && orders is not null)
+                {
+                    var matches = orders.Where(o => string.IsNullOrWhiteSpace(_orderFilter) || o.Reference.Contains(_orderFilter, StringComparison.OrdinalIgnoreCase) || o.Id.ToString().Contains(_orderFilter, StringComparison.OrdinalIgnoreCase)).Take(8).ToList();
+                    <div class="picker-list">
+                        @if (matches.Count == 0) { <div class="picker-empty">Aucune commande</div> }
+                        @foreach (var o in matches)
+                        {
+                            <button type="button" class="picker-item" @onclick="@(() => SelectOrder(o))">
+                                <span class="cell-strong">@o.Reference</span>
+                                <span class="mp-caption">@o.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy") · @o.Status · @o.GrandTotal.ToString("N0") XOF</span>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+            @if (_selectedOrder is not null) { <p class="picked">Commande : <strong>@_selectedOrder.Reference</strong></p> }
+            @if (_disputeError is not null) { <p class="login-error">@_disputeError</p> }
+            @if (disputes is not null)
+            {
+                @if (disputes.Count == 0) { <p class="mp-caption">Aucun litige sur cette commande.</p> }
+                else
+                {
+                    <div class="recent-list">
+                        @foreach (var d in disputes)
+                        {
+                            <div class="mod-row">
+                                <div><strong>@d.Type</strong> <span class="mp-caption">@d.Status</span></div>
+                                <div class="row-actions">
+                                    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.ReviewDisputeAsync(d.Id)))">Revue</MpButton>
+                                    <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Do(() => Api.ResolveDisputeAsync(d.Id, new ResolveDisputeRequest("Résolu par l'administration."))))">Résoudre</MpButton>
+                                    <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => Do(() => Api.EscalateDisputeAsync(d.Id)))">Escalader</MpButton>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </ChildContent>
+    </MpCard>
+</div>
+
+<style>
+    .mod-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--mp-space-4); align-items: start; }
+    @@media (max-width: 980px) { .mod-grid { grid-template-columns: 1fr; } }
+    .picker { position: relative; margin-bottom: var(--mp-space-3); }
+    .picker-list { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; right: 0; background: var(--mp-surface, #fff); border: 0.5px solid var(--mp-border); border-radius: var(--mp-radius, 8px); box-shadow: 0 8px 24px rgba(0,0,0,.12); max-height: 280px; overflow-y: auto; }
+    .picker-item { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: var(--mp-space-2) var(--mp-space-3); background: none; border: none; border-bottom: 0.5px solid var(--mp-border); cursor: pointer; }
+    .picker-item:hover { background: var(--mp-surface-alt, #f3f6fa); }
+    .picker-item:last-child { border-bottom: none; }
+    .picker-empty { padding: var(--mp-space-3); color: var(--mp-text-muted, #888); font-size: .85rem; }
+    .picked { font-size: .85rem; margin-bottom: var(--mp-space-3); }
+    .recent-list { display: flex; flex-direction: column; }
+    .mod-row { display: flex; align-items: center; justify-content: space-between; gap: var(--mp-space-3); padding: var(--mp-space-3) 0; border-bottom: 0.5px solid var(--mp-border); }
+    .mod-row:last-child { border-bottom: 0; }
+    .row-actions { display: flex; gap: var(--mp-space-2); flex-wrap: wrap; }
+</style>
+
+@code {
+    private IReadOnlyList<AdminProduct>? products;
+    private IReadOnlyList<AdminOrder>? orders;
+    private AdminProduct? _selectedProduct;
+    private AdminOrder? _selectedOrder;
+    private string _productFilter = "", _orderFilter = "";
+    private bool _productOpen, _orderOpen;
+    private IReadOnlyList<AdminReview>? reviews;
+    private IReadOnlyList<AdminDispute>? disputes;
+    private string? _reviewError;
+    private string? _disputeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { products = await Api.ListProductsAsync(); } catch (Exception ex) { _reviewError = ex.Message; }
+        try { orders = await Api.ListOrdersAsync(); } catch (Exception ex) { _disputeError = ex.Message; }
+    }
+
+    private async Task SelectProduct(AdminProduct p)
+    {
+        _selectedProduct = p; _productFilter = p.Name; _productOpen = false;
+        await LoadReviews();
+    }
+
+    private async Task SelectOrder(AdminOrder o)
+    {
+        _selectedOrder = o; _orderFilter = o.Reference; _orderOpen = false;
+        await LoadDisputes();
+    }
+
+    private async Task LoadReviews()
+    {
+        if (_selectedProduct is null) return;
+        _reviewError = null; reviews = null;
+        try { reviews = await Api.GetProductReviewsAsync(_selectedProduct.Id); }
+        catch (Exception ex) { _reviewError = ex.Message; }
+    }
+
+    private async Task LoadDisputes()
+    {
+        if (_selectedOrder is null) return;
+        _disputeError = null; disputes = null;
+        try { disputes = await Api.GetDisputesByOrderAsync(_selectedOrder.Id); }
+        catch (Exception ex) { _disputeError = ex.Message; }
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            if (reviews is not null) await LoadReviews();
+            if (disputes is not null) await LoadDisputes();
+        }
+        catch { /* ignore */ }
+    }
+}

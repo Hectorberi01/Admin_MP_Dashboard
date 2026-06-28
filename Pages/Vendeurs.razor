@@ -1,0 +1,123 @@
+@page "/vendeurs"
+@inject IAdminApi Api
+
+<PageTitle>Vendeurs — Console Admin</PageTitle>
+
+<PageHeader Title="Vendeurs &amp; KYB"
+            Subtitle="@(sellers is null ? "Chargement…" : $"{sellers.Count} vendeurs")" />
+
+@if (loadError is not null)
+{
+    <ErrorNotice Title="Vendeurs indisponibles" Message="@loadError" OnRetry="Reload" />
+}
+else if (sellers is null)
+{
+    <p class="mp-caption">Chargement…</p>
+}
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead>
+                    <tr>
+                        <th>Boutique</th>
+                        <th>Statut</th>
+                        <th>KYB</th>
+                        <th class="num">Commission</th>
+                        <th class="num">Note</th>
+                        <th class="num">Ventes</th>
+                        <th class="actions-col">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var s in sellers)
+                    {
+                        <tr>
+                            <td class="cell-strong">@s.ShopName</td>
+                            <td><MpBadge Variant="@(s.Status == "Active" ? BadgeVariant.Verified : s.Status == "Suspended" ? BadgeVariant.Rupture : BadgeVariant.Neutral)">@s.Status</MpBadge></td>
+                            <td><MpBadge Variant="@(s.KybStatus == "Verified" ? BadgeVariant.Verified : s.KybStatus == "Rejected" ? BadgeVariant.Rupture : BadgeVariant.Neutral)">@s.KybStatus</MpBadge></td>
+                            <td class="num mp-num">@($"{s.CommissionRate * 100:0.0} %")</td>
+                            <td class="num mp-num">@s.Rating.ToString("0.0")</td>
+                            <td class="num mp-num">@s.SalesCount</td>
+                            <td class="actions-col">
+                                <div class="row-actions">
+                                    @if (s.KybStatus is "InReview" or "Pending" or "NotStarted")
+                                    {
+                                        <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Do(() => Api.ApproveKybAsync(s.Id)))">Valider KYB</MpButton>
+                                        <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.RejectKybAsync(s.Id)))">Rejeter</MpButton>
+                                    }
+                                    @if (s.Status == "Active")
+                                    {
+                                        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.SuspendSellerAsync(s.Id)))">Suspendre</MpButton>
+                                    }
+                                    else
+                                    {
+                                        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.ActivateSellerAsync(s.Id)))">Activer</MpButton>
+                                    }
+                                    <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => OpenCommission(s))">Commission</MpButton>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+<MpModal Visible="_editing is not null"
+         VisibleChanged="@((bool v) => { if (!v) _editing = null; })"
+         Title="@(_editing is null ? "Commission" : $"Commission — {_editing.ShopName}")">
+    <ChildContent>
+        <div class="field">
+            <label>Taux de commission (%)</label>
+            <input class="mp-input" type="number" step="0.5" @bind="_ratePercent" />
+        </div>
+    </ChildContent>
+    <Footer>
+        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => _editing = null)">Annuler</MpButton>
+        <MpButton Variant="ButtonVariant.Primary" OnClick="SaveCommission">Enregistrer</MpButton>
+    </Footer>
+</MpModal>
+
+<style>
+    .row-actions { display: flex; gap: var(--mp-space-2); flex-wrap: wrap; }
+    .modal-actions { display: flex; justify-content: flex-end; gap: var(--mp-space-2); margin-top: var(--mp-space-4); }
+</style>
+
+@code {
+    private IReadOnlyList<AdminSeller>? sellers;
+    private string? loadError;
+    private AdminSeller? _editing;
+    private decimal _ratePercent;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; sellers = null;
+        try { sellers = await Api.ListSellersAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private void OpenCommission(AdminSeller s)
+    {
+        _editing = s;
+        _ratePercent = s.CommissionRate * 100m;
+    }
+
+    private async Task SaveCommission()
+    {
+        if (_editing is null) return;
+        var id = _editing.Id;
+        _editing = null;
+        await Do(() => Api.SetCommissionRateAsync(id, new CommissionRateRequest(_ratePercent / 100m)));
+    }
+}

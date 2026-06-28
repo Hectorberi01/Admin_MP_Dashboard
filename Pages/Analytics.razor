@@ -1,0 +1,61 @@
+@page "/analytics"
+@inject IAdminApi Api
+
+<PageTitle>Analytics — Console Admin</PageTitle>
+
+<PageHeader Title="Analytics" Subtitle="Performance de la plateforme (commandes &amp; GMV)" />
+
+<MpCard>
+    <ChildContent>
+        <div class="filters">
+            <label>Portée
+                <select class="mp-input" @bind="scope">
+                    <option value="Platform">Plateforme</option>
+                    <option value="Seller">Vendeur</option>
+                </select>
+            </label>
+            <label>Granularité
+                <select class="mp-input" @bind="granularity">
+                    <option value="Day">Jour</option>
+                    <option value="Month">Mois</option>
+                </select>
+            </label>
+            <label>Du <input class="mp-input" type="date" @bind="from" /></label>
+            <label>Au <input class="mp-input" type="date" @bind="to" /></label>
+            <MpButton Variant="ButtonVariant.Primary" OnClick="Load">Analyser</MpButton>
+        </div>
+    </ChildContent>
+</MpCard>
+
+@if (loadError is not null) { <ErrorNotice Title="Analytics indisponibles" Message="@loadError" OnRetry="Load" /> }
+else if (report is not null)
+{
+    <div class="kpi-grid">
+        <StatCard Stat="@(new KpiStat { Label = "Commandes", Value = report.TotalOrders.ToString("N0"), Icon = "🧾", Sublabel = $"{report.FromKey} → {report.ToKey}" })" />
+        <StatCard Stat="@(new KpiStat { Label = "GMV", Value = $"{report.TotalGmv:N0} XOF", Icon = "💰", Sublabel = report.Granularity })" />
+    </div>
+}
+
+<style>
+    .filters { display: flex; flex-wrap: wrap; gap: var(--mp-space-3); align-items: flex-end; }
+    .filters label { display: flex; flex-direction: column; gap: var(--mp-space-1); font-size: .85rem; }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--mp-space-4); margin-top: var(--mp-space-4); }
+</style>
+
+@code {
+    private AdminAnalyticsReport? report;
+    private string? loadError;
+    private string scope = "Platform";
+    private string granularity = "Day";
+    private DateTime from = DateTime.Today.AddDays(-30);
+    private DateTime to = DateTime.Today;
+
+    private string KeyOf(DateTime d) => granularity == "Month" ? d.ToString("yyyy-MM") : d.ToString("yyyy-MM-dd");
+
+    private async Task Load()
+    {
+        loadError = null; report = null;
+        try { report = await Api.GetAnalyticsAsync(scope, granularity, KeyOf(from), KeyOf(to)); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

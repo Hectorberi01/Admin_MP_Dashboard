@@ -1,0 +1,68 @@
+@page "/login"
+@layout BlankLayout
+@inject IAdminApi Api
+@inject AuthState Auth
+@inject NavigationManager Nav
+
+<PageTitle>Connexion — Console Admin</PageTitle>
+
+<div class="login-card">
+    <div class="login-brand">
+        <span class="brand-mark">M</span>
+        <span>Marketplace · Admin</span>
+    </div>
+    <h1>Connexion</h1>
+    <p class="mp-caption">Accédez à la console d'administration (rôle Admin requis).</p>
+
+    <EditForm Model="_login" OnValidSubmit="HandleLogin">
+        <div class="field">
+            <label for="email">E-mail</label>
+            <InputText id="email" class="mp-input" @bind-Value="_login.Email" placeholder="admin@marketplace.com" />
+        </div>
+        <div class="field">
+            <label for="pwd">Mot de passe</label>
+            <InputText id="pwd" type="password" class="mp-input" @bind-Value="_login.Password" placeholder="••••••••" />
+        </div>
+        <div class="field">
+            <label for="mfa">Code MFA <span class="mp-caption">(optionnel)</span></label>
+            <InputText id="mfa" class="mp-input" @bind-Value="_login.MfaCode" placeholder="123456" />
+        </div>
+
+        @if (_error is not null)
+        {
+            <p class="login-error">@_error</p>
+        }
+
+        <MpButton Variant="ButtonVariant.Primary" Type="submit" FullWidth="true" Disabled="_busy">
+            @(_busy ? "Connexion…" : "Se connecter")
+        </MpButton>
+    </EditForm>
+</div>
+
+@code {
+    private LoginModel _login = new();
+    private bool _busy;
+    private string? _error;
+
+    private async Task HandleLogin()
+    {
+        _busy = true; _error = null;
+        try
+        {
+            var result = await Api.LoginAsync(new LoginRequest(_login.Email, _login.Password, string.IsNullOrWhiteSpace(_login.MfaCode) ? null : _login.MfaCode));
+            await Auth.SetSessionAsync(result);
+
+            if (!Auth.IsAuthenticated)
+            {
+                _error = "Connexion acceptée mais aucun jeton trouvé dans la réponse.";
+                return;
+            }
+            Nav.NavigateTo("");
+        }
+        catch
+        {
+            _error = "Connexion impossible. Vérifiez vos identifiants (rôle Admin) et que le serveur est joignable.";
+        }
+        finally { _busy = false; }
+    }
+}

@@ -1,0 +1,100 @@
+@page "/marketing"
+@inject IAdminApi Api
+
+<PageTitle>Marketing — Console Admin</PageTitle>
+
+<PageHeader Title="Marketing" Subtitle="@(campaigns is null ? "Chargement…" : $"{campaigns.Count} campagnes")">
+    <Actions>
+        <MpButton Variant="ButtonVariant.Action" OnClick="@(() => showForm = true)">Nouvelle campagne</MpButton>
+    </Actions>
+</PageHeader>
+
+@if (loadError is not null) { <ErrorNotice Title="Campagnes indisponibles" Message="@loadError" OnRetry="Reload" /> }
+else if (campaigns is null) { <p class="mp-caption">Chargement…</p> }
+else if (campaigns.Count == 0) { <MpCard><ChildContent><p class="mp-caption">Aucune campagne.</p></ChildContent></MpCard> }
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead><tr><th>Nom</th><th>Type</th><th>Période</th><th>Statut</th><th class="actions-col">Actions</th></tr></thead>
+                <tbody>
+                    @foreach (var c in campaigns)
+                    {
+                        <tr>
+                            <td class="cell-strong">@c.Name</td>
+                            <td>@c.Type</td>
+                            <td>@c.StartUtc.ToString("dd/MM/yy") → @c.EndUtc.ToString("dd/MM/yy")</td>
+                            <td><MpBadge Variant="@StatusVariant(c.Status)">@c.Status</MpBadge></td>
+                            <td class="actions-col">
+                                <div class="row-actions">
+                                    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.ScheduleCampaignAsync(c.Id)))">Planifier</MpButton>
+                                    <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Do(() => Api.ActivateCampaignAsync(c.Id)))">Activer</MpButton>
+                                    <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.EndCampaignAsync(c.Id)))">Terminer</MpButton>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+<MpModal @bind-Visible="showForm" Title="Nouvelle campagne">
+    <ChildContent>
+        <div class="form-grid">
+            <label>Nom <input class="mp-input" @bind="fName" /></label>
+            <label>Type <input class="mp-input" @bind="fType" placeholder="Discount" /></label>
+            <label>Début <input class="mp-input" type="date" @bind="fStart" /></label>
+            <label>Fin <input class="mp-input" type="date" @bind="fEnd" /></label>
+        </div>
+    </ChildContent>
+    <Footer>
+        <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => showForm = false)">Annuler</MpButton>
+        <MpButton Variant="ButtonVariant.Primary" OnClick="Create">Créer</MpButton>
+    </Footer>
+</MpModal>
+
+<style>
+    .row-actions { display: flex; gap: var(--mp-space-2); }
+    .form-grid { display: flex; flex-direction: column; gap: var(--mp-space-3); }
+    .form-grid label { display: flex; flex-direction: column; gap: var(--mp-space-1); font-size: .85rem; }
+</style>
+
+@code {
+    private IReadOnlyList<Campaign>? campaigns;
+    private string? loadError;
+    private bool showForm;
+    private string fName = "", fType = "Discount";
+    private DateTime fStart = DateTime.Today, fEnd = DateTime.Today.AddDays(7);
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; campaigns = null;
+        try { campaigns = await Api.ListCampaignsAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task Create()
+    {
+        showForm = false;
+        await Do(() => Api.CreateCampaignAsync(new CampaignRequest(fName, fType, fStart.ToUniversalTime(), fEnd.ToUniversalTime(), null)));
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private static BadgeVariant StatusVariant(string s) => s switch
+    {
+        "Active" => BadgeVariant.Verified,
+        "Scheduled" => BadgeVariant.Promo,
+        "Ended" => BadgeVariant.Neutral,
+        _ => BadgeVariant.Neutral
+    };
+}

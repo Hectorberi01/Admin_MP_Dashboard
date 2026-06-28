@@ -1,0 +1,179 @@
+@page "/roles"
+@inject IAdminApi Api
+
+<PageTitle>Rôles — Console Admin</PageTitle>
+
+<PageHeader Title="Rôles &amp; permissions" Subtitle="Gestion des rôles (RBAC) et attribution aux comptes.">
+    <Actions>
+        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => _showCreate = !_showCreate)">@(_showCreate ? "Fermer" : "＋ Nouveau rôle")</MpButton>
+    </Actions>
+</PageHeader>
+
+@if (loadError is not null) { <ErrorNotice Title="Rôles indisponibles" Message="@loadError" OnRetry="Reload" /> }
+@if (_msg is not null) { <p class="ok-msg">@_msg</p> }
+
+@if (_showCreate)
+{
+    <MpCard Title="Nouveau rôle">
+        <ChildContent>
+            <div class="create-grid">
+                <div class="field"><label>Nom</label><input class="mp-input" @bind="_name" /></div>
+                <div class="field"><label>Description</label><input class="mp-input" @bind="_desc" /></div>
+            </div>
+
+            <div class="perm-head">
+                <label>Permissions <span class="mp-caption">(@_selectedPerms.Count sélectionnée(s))</span></label>
+                <input class="mp-input perm-search" placeholder="Filtrer les permissions…" @bind="_permFilter" @bind:event="oninput" />
+            </div>
+
+            <div class="perm-groups">
+                @foreach (var group in PermissionCatalog.Groups)
+                {
+                    var visible = group.Permissions.Where(p => p.Contains(_permFilter, StringComparison.OrdinalIgnoreCase)).ToList();
+                    @if (visible.Count > 0)
+                    {
+                        <fieldset class="perm-group">
+                            <legend>@group.Label</legend>
+                            @foreach (var p in visible)
+                            {
+                                <label class="perm-item">
+                                    <input type="checkbox" checked="@_selectedPerms.Contains(p)" @onchange="e => TogglePerm(p, e)" />
+                                    <span>@p</span>
+                                </label>
+                            }
+                        </fieldset>
+                    }
+                }
+            </div>
+
+            <div class="create-grid">
+                <div class="field"><label>Permission personnalisée (ressource.action)</label><input class="mp-input" @bind="_customPerm" placeholder="ex. reports.export" /></div>
+                <MpButton Variant="ButtonVariant.Secondary" OnClick="AddCustomPerm">Ajouter</MpButton>
+            </div>
+
+            @if (_selectedPerms.Count > 0)
+            {
+                <div class="perm-chips">
+                    @foreach (var p in _selectedPerms)
+                    {
+                        <span class="perm-chip">@p <button type="button" @onclick="@(() => _selectedPerms.Remove(p))">✕</button></span>
+                    }
+                </div>
+            }
+
+            <MpButton Variant="ButtonVariant.Primary" OnClick="CreateRole">Créer le rôle</MpButton>
+        </ChildContent>
+    </MpCard>
+}
+
+<MpCard Title="Rôles" NoPadding="true">
+    <ChildContent>
+        @if (roles is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Nom</th><th>Description</th><th>Système</th><th>Permissions</th></tr></thead>
+                <tbody>
+                    @foreach (var r in roles)
+                    {
+                        <tr>
+                            <td class="cell-strong">@r.Name</td>
+                            <td>@(r.Description ?? "—")</td>
+                            <td>@(r.IsSystem ? "Oui" : "Non")</td>
+                            <td class="mp-caption">@string.Join(", ", r.Permissions)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<MpCard Title="Attribuer un rôle à un compte">
+    <ChildContent>
+        <div class="create-grid">
+            <div class="field"><label>ID utilisateur (GUID)</label><input class="mp-input" @bind="_userId" /></div>
+            <div class="field"><label>Rôle</label>
+                <select class="mp-input" @bind="_roleId">
+                    <option value="">— choisir —</option>
+                    @if (roles is not null)
+                    {
+                        @foreach (var r in roles)
+                        {
+                            <option value="@r.Id">@r.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+            <MpButton Variant="ButtonVariant.Primary" OnClick="AssignRole">Attribuer</MpButton>
+        </div>
+    </ChildContent>
+</MpCard>
+
+<style>
+    .mp-pad { padding: var(--mp-space-4); }
+    .create-grid { display: flex; gap: var(--mp-space-3); align-items: flex-end; flex-wrap: wrap; }
+    .ok-msg { color: var(--mp-success, #1a7f37); margin-bottom: var(--mp-space-3); }
+    .perm-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--mp-space-3); margin: var(--mp-space-4) 0 var(--mp-space-2); flex-wrap: wrap; }
+    .perm-search { max-width: 320px; }
+    .perm-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: var(--mp-space-3); margin-bottom: var(--mp-space-3); }
+    .perm-group { border: 0.5px solid var(--mp-border); border-radius: var(--mp-radius, 8px); padding: var(--mp-space-2) var(--mp-space-3); }
+    .perm-group legend { font-size: .8rem; font-weight: 600; padding: 0 var(--mp-space-1); color: var(--mp-text-muted, #666); }
+    .perm-item { display: flex; align-items: center; gap: var(--mp-space-2); padding: 2px 0; font-size: .85rem; cursor: pointer; }
+    .perm-chips { display: flex; flex-wrap: wrap; gap: var(--mp-space-2); margin-bottom: var(--mp-space-3); }
+    .perm-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--mp-surface-alt, #eef2f7); border-radius: 999px; padding: 2px 10px; font-size: .8rem; }
+    .perm-chip button { border: none; background: none; cursor: pointer; color: var(--mp-text-muted, #888); font-size: .75rem; line-height: 1; }
+</style>
+
+@code {
+    private IReadOnlyList<AdminRole>? roles;
+    private string? loadError, _msg;
+    private bool _showCreate;
+    private string _name = "", _desc = "";
+    private string _permFilter = "", _customPerm = "";
+    private readonly HashSet<string> _selectedPerms = new();
+    private string _userId = "", _roleId = "";
+
+    private void TogglePerm(string perm, ChangeEventArgs e)
+    {
+        if (e.Value is true) _selectedPerms.Add(perm);
+        else _selectedPerms.Remove(perm);
+    }
+
+    private void AddCustomPerm()
+    {
+        var p = _customPerm.Trim().ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(p)) { _selectedPerms.Add(p); _customPerm = ""; }
+    }
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; roles = null;
+        try { roles = await Api.ListRolesAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task CreateRole()
+    {
+        _msg = null;
+        try
+        {
+            var perms = _selectedPerms.ToList();
+            await Api.CreateRoleAsync(new CreateRoleRequest(_name, string.IsNullOrWhiteSpace(_desc) ? null : _desc, perms.Count > 0 ? perms : null));
+            _showCreate = false; _name = _desc = ""; _selectedPerms.Clear(); _permFilter = _customPerm = "";
+            _msg = "Rôle créé.";
+            await Reload();
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task AssignRole()
+    {
+        _msg = null;
+        if (!Guid.TryParse(_userId, out var uid) || !Guid.TryParse(_roleId, out var rid)) { loadError = "Utilisateur ou rôle invalide."; return; }
+        try { await Api.AssignRoleAsync(uid, new RoleRefRequest(rid)); _msg = "Rôle attribué."; }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

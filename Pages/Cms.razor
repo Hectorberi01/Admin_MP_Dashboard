@@ -1,0 +1,48 @@
+@page "/cms"
+@inject IAdminApi Api
+
+<PageTitle>CMS — Console Admin</PageTitle>
+
+<PageHeader Title="CMS" Subtitle="@(blocks is null ? "Chargement…" : $"{blocks.Count} blocs de contenu")" />
+
+@if (loadError is not null) { <ErrorNotice Title="Contenus indisponibles" Message="@loadError" OnRetry="Reload" /> }
+else if (blocks is null) { <p class="mp-caption">Chargement…</p> }
+else if (blocks.Count == 0) { <MpCard><ChildContent><p class="mp-caption">Aucun bloc de contenu.</p></ChildContent></MpCard> }
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead><tr><th>Emplacement</th><th>Type</th><th class="mp-num">Position</th><th>Contenu</th><th>Statut</th></tr></thead>
+                <tbody>
+                    @foreach (var b in blocks)
+                    {
+                        <tr>
+                            <td class="cell-strong">@b.Slot</td>
+                            <td>@b.Type</td>
+                            <td class="mp-num">@b.Position</td>
+                            <td class="cell-truncate">@b.Content</td>
+                            <td><MpBadge Variant="@(b.Status == "Published" ? BadgeVariant.Verified : b.Status == "Archived" ? BadgeVariant.Rupture : BadgeVariant.Neutral)">@b.Status</MpBadge></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+<style>.cell-truncate { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }</style>
+
+@code {
+    private IReadOnlyList<AdminContent>? blocks;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; blocks = null;
+        try { blocks = await Api.ListContentAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

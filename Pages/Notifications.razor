@@ -1,0 +1,45 @@
+@page "/notifications"
+@inject IAdminApi Api
+
+<PageTitle>Notifications — Console Admin</PageTitle>
+
+<PageHeader Title="Notifications" Subtitle="@(items is null ? "Chargement…" : $"{items.Count} notifications émises")" />
+
+@if (loadError is not null) { <ErrorNotice Title="Notifications indisponibles" Message="@loadError" OnRetry="Reload" /> }
+else if (items is null) { <p class="mp-caption">Chargement…</p> }
+else if (items.Count == 0) { <MpCard><ChildContent><p class="mp-caption">Aucune notification.</p></ChildContent></MpCard> }
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead><tr><th>Date</th><th>Canal</th><th>Sujet</th><th>Statut</th></tr></thead>
+                <tbody>
+                    @foreach (var n in items)
+                    {
+                        <tr>
+                            <td>@n.CreatedAtUtc.ToLocalTime().ToString("dd/MM HH:mm")</td>
+                            <td>@n.Channel</td>
+                            <td class="cell-strong">@n.Subject</td>
+                            <td><MpBadge Variant="@(n.Status == "Sent" ? BadgeVariant.Verified : n.Status == "Failed" ? BadgeVariant.Rupture : BadgeVariant.Neutral)">@n.Status</MpBadge></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+@code {
+    private IReadOnlyList<AdminNotification>? items;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; items = null;
+        try { items = await Api.ListNotificationsAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

@@ -1,0 +1,85 @@
+@page "/taxes"
+@inject IAdminApi Api
+
+<PageTitle>Taxes — Console Admin</PageTitle>
+
+<PageHeader Title="Taxes" Subtitle="@(rules is null ? "Chargement…" : $"{rules.Count} règles de taxe")">
+    <Actions>
+        <MpButton Variant="ButtonVariant.Action" OnClick="@(() => showForm = true)">Nouvelle règle</MpButton>
+    </Actions>
+</PageHeader>
+
+@if (loadError is not null) { <ErrorNotice Title="Taxes indisponibles" Message="@loadError" OnRetry="Reload" /> }
+else if (rules is null) { <p class="mp-caption">Chargement…</p> }
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead><tr><th>Juridiction</th><th>Type</th><th class="mp-num">Taux</th><th>État</th><th class="actions-col"></th></tr></thead>
+                <tbody>
+                    @foreach (var r in rules)
+                    {
+                        <tr>
+                            <td class="cell-strong">@r.Jurisdiction</td>
+                            <td>@r.Type</td>
+                            <td class="mp-num">@((r.Rate * 100).ToString("0.##")) %</td>
+                            <td><MpBadge Variant="@(r.IsActive ? BadgeVariant.Verified : BadgeVariant.Neutral)">@(r.IsActive ? "Active" : "Inactive")</MpBadge></td>
+                            <td class="actions-col">
+                                @if (r.IsActive)
+                                {
+                                    <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.DeactivateTaxRuleAsync(r.Id)))">Désactiver</MpButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+<MpModal @bind-Visible="showForm" Title="Nouvelle règle de taxe">
+    <ChildContent>
+        <div class="form-grid">
+            <label>Juridiction <input class="mp-input" @bind="fJur" placeholder="SN" /></label>
+            <label>Type <input class="mp-input" @bind="fType" placeholder="VAT" /></label>
+            <label>Taux (0–1) <input class="mp-input" type="number" step="0.01" @bind="fRate" /></label>
+        </div>
+    </ChildContent>
+    <Footer>
+        <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => showForm = false)">Annuler</MpButton>
+        <MpButton Variant="ButtonVariant.Primary" OnClick="Create">Créer</MpButton>
+    </Footer>
+</MpModal>
+
+<style>.form-grid { display: flex; flex-direction: column; gap: var(--mp-space-3); } .form-grid label { display: flex; flex-direction: column; gap: var(--mp-space-1); font-size: .85rem; }</style>
+
+@code {
+    private IReadOnlyList<TaxRule>? rules;
+    private string? loadError;
+    private bool showForm;
+    private string fJur = "SN", fType = "VAT";
+    private decimal fRate = 0.18m;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; rules = null;
+        try { rules = await Api.ListTaxRulesAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task Create()
+    {
+        showForm = false;
+        await Do(() => Api.CreateTaxRuleAsync(new TaxRuleRequest(fJur, null, fRate, fType, null)));
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

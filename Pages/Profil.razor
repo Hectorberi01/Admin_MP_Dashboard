@@ -1,0 +1,37 @@
+@page "/profil"
+@inject AuthState Auth
+@inject IAdminApi Api
+@inject NavigationManager Nav
+
+<PageTitle>Mon compte — Console Admin</PageTitle>
+
+<PageHeader Title="Mon compte" Subtitle="Session administrateur." />
+
+<MpCard Title="Session">
+    <ChildContent>
+        <dl class="kv">
+            <div><dt>Administrateur</dt><dd>@(string.IsNullOrEmpty(Auth.SellerName) ? "—" : Auth.SellerName)</dd></div>
+            <div><dt>Jeton</dt><dd>@(Auth.IsAuthenticated ? "Actif" : "Aucun")</dd></div>
+            <div><dt>Expiration</dt><dd>@(Auth.ExpiresAt?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "—")</dd></div>
+        </dl>
+        <div class="logout-row">
+            <MpButton Variant="ButtonVariant.Danger" OnClick="Logout">Se déconnecter</MpButton>
+        </div>
+    </ChildContent>
+</MpCard>
+
+<style>
+    .kv { display: flex; flex-direction: column; margin: 0 0 var(--mp-space-4); }
+    .kv > div { display: flex; justify-content: space-between; gap: var(--mp-space-4); padding: var(--mp-space-2) 0; border-bottom: 0.5px solid var(--mp-border); }
+    .kv > div:last-child { border-bottom: 0; }
+    .kv dt { color: var(--mp-text-muted); font-size: 14px; }
+    .kv dd { margin: 0; font-weight: 500; text-align: right; }
+</style>
+
+@code {
+    private async Task Logout()
+    {
+        await Auth.ClearAsync();
+        Nav.NavigateTo("login");
+    }
+}

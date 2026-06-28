@@ -1,0 +1,130 @@
+@page "/finances"
+@inject IAdminApi Api
+
+<PageTitle>Finances — Console Admin</PageTitle>
+
+<PageHeader Title="Finances" Subtitle="Reversements et règles de commission de la plateforme.">
+    <Actions>
+        <MpButton Variant="ButtonVariant.Primary" OnClick="RunSettlement">Générer un lot (30 j)</MpButton>
+    </Actions>
+</PageHeader>
+
+@if (loadError is not null) { <ErrorNotice Title="Finances indisponibles" Message="@loadError" OnRetry="Reload" /> }
+
+<MpCard Title="Lots de reversement" NoPadding="true">
+    <ChildContent>
+        @if (batches is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else if (batches.Count == 0) { <p class="mp-caption mp-pad">Aucun lot pour l'instant.</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Période</th><th>Devise</th><th class="num">Net total</th><th>Statut</th><th class="num">Payouts</th></tr></thead>
+                <tbody>
+                    @foreach (var b in batches)
+                    {
+                        <tr>
+                            <td class="mp-num">@b.PeriodStartUtc.ToString("dd/MM") – @b.PeriodEndUtc.ToString("dd/MM/yyyy")</td>
+                            <td>@b.Currency</td>
+                            <td class="num mp-num mp-body-strong">@b.TotalNet.ToString("0")</td>
+                            <td><MpBadge Variant="BadgeVariant.Neutral">@b.Status</MpBadge></td>
+                            <td class="num mp-num">@b.Payouts.Count</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<MpCard Title="Règles de commission">
+    <HeaderContent>
+        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => _showCreate = !_showCreate)">@(_showCreate ? "Fermer" : "＋ Nouvelle règle")</MpButton>
+    </HeaderContent>
+    <ChildContent>
+        @if (_showCreate)
+        {
+            <div class="create-grid">
+                <div class="field"><label>Portée</label>
+                    <select class="mp-input" @bind="_scope"><option>Global</option><option>Category</option><option>Seller</option></select>
+                </div>
+                <div class="field"><label>Taux (%)</label><input class="mp-input" type="number" step="0.5" @bind="_ratePct" /></div>
+                <div class="field"><label>Frais fixe</label><input class="mp-input" type="number" @bind="_fixed" /></div>
+                <div class="field"><label>Devise</label><input class="mp-input" @bind="_currency" /></div>
+                <MpButton Variant="ButtonVariant.Primary" OnClick="CreateRule">Créer</MpButton>
+            </div>
+        }
+        @if (rules is null) { <p class="mp-caption">Chargement…</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Portée</th><th class="num">Taux</th><th class="num">Frais fixe</th><th>Active</th><th class="actions-col"></th></tr></thead>
+                <tbody>
+                    @foreach (var r in rules)
+                    {
+                        <tr>
+                            <td>@r.Scope</td>
+                            <td class="num mp-num">@($"{r.Rate * 100:0.0} %")</td>
+                            <td class="num mp-num">@r.FixedFee.ToString("0")</td>
+                            <td>@(r.IsActive ? "Oui" : "Non")</td>
+                            <td class="actions-col">
+                                @if (r.IsActive) { <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.DeactivateCommissionRuleAsync(r.Id)))">Désactiver</MpButton> }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<style>
+    .mp-pad { padding: var(--mp-space-4); }
+    .create-grid { display: flex; gap: var(--mp-space-3); align-items: flex-end; flex-wrap: wrap; margin-bottom: var(--mp-space-4); }
+</style>
+
+@code {
+    private IReadOnlyList<SettlementBatch>? batches;
+    private IReadOnlyList<CommissionRule>? rules;
+    private string? loadError;
+    private bool _showCreate;
+    private string _scope = "Global";
+    private decimal _ratePct = 10;
+    private decimal _fixed = 0;
+    private string _currency = "XOF";
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null;
+        try
+        {
+            batches = await Api.ListBatchesAsync();
+            rules = await Api.ListCommissionRulesAsync();
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task RunSettlement()
+    {
+        try { await Api.RunSettlementAsync(new RunSettlementRequest(DateTime.UtcNow.AddDays(-30), DateTime.UtcNow)); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task CreateRule()
+    {
+        try
+        {
+            await Api.CreateCommissionRuleAsync(new CommissionRuleRequest(_scope, null, _ratePct / 100m, _fixed, _currency, null, null, DateTime.UtcNow));
+            _showCreate = false;
+            await Reload();
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

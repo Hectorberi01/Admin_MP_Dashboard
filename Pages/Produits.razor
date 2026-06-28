@@ -1,0 +1,78 @@
+@page "/produits"
+@inject IAdminApi Api
+@inject NavigationManager Nav
+
+<PageTitle>Produits — Console Admin</PageTitle>
+
+<PageHeader Title="Produits" Subtitle="@(products is null ? "Chargement…" : $"{products.Count} produits · valider ou rejeter les publications")" />
+
+@if (loadError is not null) { <ErrorNotice Title="Produits indisponibles" Message="@loadError" OnRetry="Reload" /> }
+else if (products is null) { <p class="mp-caption">Chargement…</p> }
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead><tr><th>Produit</th><th>SKU/Slug</th><th>Statut</th><th class="actions-col">Modération</th></tr></thead>
+                <tbody>
+                    @foreach (var p in products)
+                    {
+                        <tr>
+                            <td>
+                                <div class="prod-cell">
+                                    @if (!string.IsNullOrEmpty(p.PrimaryImageUrl))
+                                    {
+                                        <img class="prod-thumb" src="@p.PrimaryImageUrl" alt="@p.Name" />
+                                    }
+                                    else
+                                    {
+                                        <span class="prod-thumb prod-thumb-empty" aria-hidden="true">📦</span>
+                                    }
+                                    <a class="cell-strong prod-link" href="produit/@p.Id">@p.Name</a>
+                                </div>
+                            </td>
+                            <td class="mp-num">@p.Slug</td>
+                            <td><MpBadge Variant="@(p.Status == "Active" ? BadgeVariant.Verified : p.Status == "Archived" ? BadgeVariant.Rupture : BadgeVariant.Neutral)">@p.Status</MpBadge></td>
+                            <td class="actions-col">
+                                <div class="row-actions">
+                                    <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => Nav.NavigateTo($"produit/{p.Id}"))">Détail</MpButton>
+                                    <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Do(() => Api.ApproveProductAsync(p.Id)))">Valider</MpButton>
+                                    <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.RejectProductAsync(p.Id)))">Rejeter</MpButton>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+<style>
+    .row-actions { display: flex; gap: var(--mp-space-2); }
+    .prod-cell { display: flex; align-items: center; gap: var(--mp-space-3); }
+    .prod-thumb { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; background: var(--mp-surface-alt, #eef2f7); flex: 0 0 auto; }
+    .prod-thumb-empty { display: inline-flex; align-items: center; justify-content: center; font-size: 20px; }
+    .prod-link { text-decoration: none; }
+    .prod-link:hover { text-decoration: underline; }
+</style>
+
+@code {
+    private IReadOnlyList<AdminProduct>? products;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; products = null;
+        try { products = await Api.ListProductsAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

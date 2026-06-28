@@ -1,0 +1,95 @@
+@page "/litiges"
+@inject IAdminApi Api
+
+<PageTitle>Litiges — Console Admin</PageTitle>
+
+<PageHeader Title="Litiges" Subtitle="@(disputes is null ? "Chargement…" : $"{disputes.Count} litiges de la plateforme")" />
+
+@if (loadError is not null) { <ErrorNotice Title="Litiges indisponibles" Message="@loadError" OnRetry="Reload" /> }
+else if (disputes is null) { <p class="mp-caption">Chargement…</p> }
+else if (disputes.Count == 0) { <MpCard><ChildContent><p class="mp-caption">Aucun litige.</p></ChildContent></MpCard> }
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead><tr><th>Date</th><th>Type</th><th>Statut</th><th>Résolution</th><th class="actions-col">Actions</th></tr></thead>
+                <tbody>
+                    @foreach (var d in disputes)
+                    {
+                        <tr>
+                            <td>@d.CreatedAtUtc.ToLocalTime().ToString("dd/MM/yyyy")</td>
+                            <td class="cell-strong">@d.Type</td>
+                            <td><MpBadge Variant="@StatusVariant(d.Status)">@d.Status</MpBadge></td>
+                            <td>@(d.Resolution ?? "—")</td>
+                            <td class="actions-col">
+                                <div class="row-actions">
+                                    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.ReviewDisputeAsync(d.Id)))">Revue</MpButton>
+                                    <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => OpenResolve(d))">Résoudre</MpButton>
+                                    <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.EscalateDisputeAsync(d.Id)))">Escalader</MpButton>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+<MpModal @bind-Visible="showResolve" Title="Résoudre le litige">
+    <ChildContent>
+        <div class="form-grid">
+            <label>Décision <input class="mp-input" @bind="resolution" placeholder="Remboursement intégral" /></label>
+        </div>
+    </ChildContent>
+    <Footer>
+        <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => showResolve = false)">Annuler</MpButton>
+        <MpButton Variant="ButtonVariant.Primary" OnClick="Resolve">Valider</MpButton>
+    </Footer>
+</MpModal>
+
+<style>
+    .row-actions { display: flex; gap: var(--mp-space-2); }
+    .form-grid { display: flex; flex-direction: column; gap: var(--mp-space-3); }
+    .form-grid label { display: flex; flex-direction: column; gap: var(--mp-space-1); font-size: .85rem; }
+</style>
+
+@code {
+    private IReadOnlyList<AdminDispute>? disputes;
+    private string? loadError;
+    private bool showResolve;
+    private Guid resolveId;
+    private string resolution = "";
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; disputes = null;
+        try { disputes = await Api.ListDisputesAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private void OpenResolve(AdminDispute d) { resolveId = d.Id; resolution = ""; showResolve = true; }
+
+    private async Task Resolve()
+    {
+        showResolve = false;
+        await Do(() => Api.ResolveDisputeAsync(resolveId, new ResolveDisputeRequest(resolution)));
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private static BadgeVariant StatusVariant(string s) => s switch
+    {
+        "Resolved" => BadgeVariant.Verified,
+        "Escalated" => BadgeVariant.Rupture,
+        "UnderReview" => BadgeVariant.Promo,
+        _ => BadgeVariant.Neutral
+    };
+}

@@ -1,0 +1,64 @@
+@page "/utilisateurs"
+@inject IAdminApi Api
+
+<PageTitle>Utilisateurs — Console Admin</PageTitle>
+
+<PageHeader Title="Utilisateurs" Subtitle="@(users is null ? "Chargement…" : $"{users.Count} comptes")" />
+
+@if (loadError is not null) { <ErrorNotice Title="Utilisateurs indisponibles" Message="@loadError" OnRetry="Reload" /> }
+else if (users is null) { <p class="mp-caption">Chargement…</p> }
+else
+{
+    <MpCard NoPadding="true">
+        <ChildContent>
+            <table class="mp-table">
+                <thead>
+                    <tr><th>Nom</th><th>E-mail</th><th>Téléphone</th><th>Statut</th><th>E-mail vérifié</th><th class="num">Rôles</th><th class="actions-col">Actions</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in users)
+                    {
+                        <tr>
+                            <td class="cell-strong">@u.FullName</td>
+                            <td class="mp-num">@u.Email</td>
+                            <td class="mp-num">@u.PhoneNumber</td>
+                            <td><MpBadge Variant="@(u.Status == "Active" ? BadgeVariant.Verified : u.Status == "Suspended" ? BadgeVariant.Rupture : BadgeVariant.Neutral)">@u.Status</MpBadge></td>
+                            <td>@(u.EmailVerified ? "Oui" : "Non")</td>
+                            <td class="num mp-num">@u.RoleIds.Count</td>
+                            <td class="actions-col">
+                                @if (u.Status == "Active")
+                                {
+                                    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.SuspendUserAsync(u.Id)))">Suspendre</MpButton>
+                                }
+                                else
+                                {
+                                    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.ReactivateUserAsync(u.Id)))">Réactiver</MpButton>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </ChildContent>
+    </MpCard>
+}
+
+@code {
+    private IReadOnlyList<AdminUser>? users;
+    private string? loadError;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null; users = null;
+        try { users = await Api.ListUsersAsync(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

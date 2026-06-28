@@ -1,0 +1,140 @@
+@page "/plateforme"
+@inject IAdminApi Api
+
+<PageTitle>Plateforme — Console Admin</PageTitle>
+
+<PageHeader Title="Plateforme" Subtitle="Taxes, campagnes marketing et stock faible." />
+
+@if (loadError is not null) { <ErrorNotice Title="Plateforme indisponible" Message="@loadError" OnRetry="Reload" /> }
+
+<MpCard Title="Règles de taxe">
+    <HeaderContent>
+        <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => _showTax = !_showTax)">@(_showTax ? "Fermer" : "＋ Nouvelle règle")</MpButton>
+    </HeaderContent>
+    <ChildContent>
+        @if (_showTax)
+        {
+            <div class="create-grid">
+                <div class="field"><label>Juridiction</label><input class="mp-input" @bind="_jur" placeholder="SN" /></div>
+                <div class="field"><label>Taux (%)</label><input class="mp-input" type="number" step="0.5" @bind="_taxPct" /></div>
+                <div class="field"><label>Type</label><input class="mp-input" @bind="_taxType" placeholder="VAT" /></div>
+                <MpButton Variant="ButtonVariant.Primary" OnClick="CreateTax">Créer</MpButton>
+            </div>
+        }
+        @if (tax is null) { <p class="mp-caption">Chargement…</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Juridiction</th><th class="num">Taux</th><th>Type</th><th>Active</th><th class="actions-col"></th></tr></thead>
+                <tbody>
+                    @foreach (var t in tax)
+                    {
+                        <tr>
+                            <td>@t.Jurisdiction</td>
+                            <td class="num mp-num">@($"{t.Rate * 100:0.0} %")</td>
+                            <td>@t.Type</td>
+                            <td>@(t.IsActive ? "Oui" : "Non")</td>
+                            <td class="actions-col">@if (t.IsActive) { <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.DeactivateTaxRuleAsync(t.Id)))">Désactiver</MpButton> }</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<MpCard Title="Campagnes marketing" NoPadding="true">
+    <ChildContent>
+        @if (campaigns is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else if (campaigns.Count == 0) { <p class="mp-caption mp-pad">Aucune campagne.</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>Nom</th><th>Type</th><th>Statut</th><th class="actions-col">Actions</th></tr></thead>
+                <tbody>
+                    @foreach (var c in campaigns)
+                    {
+                        <tr>
+                            <td class="cell-strong">@c.Name</td>
+                            <td>@c.Type</td>
+                            <td><MpBadge Variant="BadgeVariant.Neutral">@c.Status</MpBadge></td>
+                            <td class="actions-col">
+                                <div class="row-actions">
+                                    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Do(() => Api.ScheduleCampaignAsync(c.Id)))">Planifier</MpButton>
+                                    <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Do(() => Api.ActivateCampaignAsync(c.Id)))">Activer</MpButton>
+                                    <MpButton Variant="ButtonVariant.Tertiary" OnClick="@(() => Do(() => Api.EndCampaignAsync(c.Id)))">Terminer</MpButton>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<MpCard Title="Stock faible" NoPadding="true">
+    <ChildContent>
+        @if (lowStock is null) { <p class="mp-caption mp-pad">Chargement…</p> }
+        else if (lowStock.Count == 0) { <p class="mp-caption mp-pad">Aucune rupture signalée. 🎉</p> }
+        else
+        {
+            <table class="mp-table">
+                <thead><tr><th>SKU</th><th class="num">Dispo</th><th class="num">Seuil</th></tr></thead>
+                <tbody>
+                    @foreach (var i in lowStock)
+                    {
+                        <tr><td class="mp-num">@i.Sku</td><td class="num mp-num">@i.Available</td><td class="num mp-num">@i.ReorderThreshold</td></tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </ChildContent>
+</MpCard>
+
+<style>
+    .mp-pad { padding: var(--mp-space-4); }
+    .create-grid { display: flex; gap: var(--mp-space-3); align-items: flex-end; flex-wrap: wrap; margin-bottom: var(--mp-space-4); }
+    .row-actions { display: flex; gap: var(--mp-space-2); flex-wrap: wrap; }
+</style>
+
+@code {
+    private IReadOnlyList<TaxRule>? tax;
+    private IReadOnlyList<Campaign>? campaigns;
+    private IReadOnlyList<InventoryItem>? lowStock;
+    private string? loadError;
+    private bool _showTax;
+    private string _jur = "SN", _taxType = "VAT";
+    private decimal _taxPct = 18;
+
+    protected override Task OnInitializedAsync() => Reload();
+
+    private async Task Reload()
+    {
+        loadError = null;
+        try
+        {
+            tax = await Api.ListTaxRulesAsync();
+            campaigns = await Api.ListCampaignsAsync();
+            lowStock = await Api.ListLowStockAsync();
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task CreateTax()
+    {
+        try
+        {
+            await Api.CreateTaxRuleAsync(new TaxRuleRequest(_jur, null, _taxPct / 100m, _taxType, DateTime.UtcNow));
+            _showTax = false;
+            await Reload();
+        }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+
+    private async Task Do(Func<Task> action)
+    {
+        try { await action(); await Reload(); }
+        catch (Exception ex) { loadError = ex.Message; }
+    }
+}

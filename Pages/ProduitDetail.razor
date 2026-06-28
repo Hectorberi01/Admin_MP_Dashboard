@@ -1,0 +1,214 @@
+@page "/produit/{Id:guid}"
+@inject IAdminApi Api
+@inject NavigationManager Nav
+
+<PageTitle>@(product?.Name ?? "Produit") — Console Admin</PageTitle>
+
+@if (_loading)
+{
+    <p class="mp-caption">Chargement…</p>
+}
+else if (product is null)
+{
+    <PageHeader Title="Produit introuvable" Subtitle="Ce produit n'existe pas." />
+    <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Nav.NavigateTo("produits"))">← Retour aux produits</MpButton>
+}
+else
+{
+    <PageHeader Title="@product.Name" Subtitle="@($"Fiche produit · {StatusLabel(product.Status)}")">
+        <Actions>
+            <MpButton Variant="ButtonVariant.Secondary" OnClick="@(() => Nav.NavigateTo("produits"))">← Retour</MpButton>
+            <MpButton Variant="ButtonVariant.Primary" OnClick="@(() => Do(() => Api.ApproveProductAsync(product.Id)))">Valider</MpButton>
+            <MpButton Variant="ButtonVariant.Danger" OnClick="@(() => Do(() => Api.RejectProductAsync(product.Id)))">Rejeter</MpButton>
+        </Actions>
+    </PageHeader>
+
+    @if (_msg is not null) { <p class="ok-msg">@_msg</p> }
+
+    <div class="detail-grid">
+        <div class="gallery">
+            <MpCard NoPadding="true">
+                <ChildContent>
+                    @if (!string.IsNullOrEmpty(CurrentImage?.Url))
+                    {
+                        <img class="detail-photo" src="@CurrentImage!.Url" alt="@(CurrentImage.AltText ?? product.Name)" />
+                    }
+                    else
+                    {
+                        <div class="detail-image" aria-hidden="true">📦</div>
+                    }
+                </ChildContent>
+            </MpCard>
+
+            @if (product.Media.Count > 1)
+            {
+                <div class="thumbs">
+                    @for (var i = 0; i < product.Media.Count; i++)
+                    {
+                        var idx = i;
+                        var m = product.Media[i];
+                        <button type="button" class="thumb @(idx == selectedImage ? "is-active" : null)" @onclick="@(() => selectedImage = idx)">
+                            <img class="thumb-img" src="@m.Url" alt="@m.AltText" />
+                            @if (m.IsPrimary) { <span class="thumb-primary" title="Image principale">●</span> }
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="detail-info">
+            <MpBadge Variant="@StatusVariant(product.Status)">@StatusLabel(product.Status)</MpBadge>
+
+            <MpCard Title="Informations">
+                <ChildContent>
+                    <dl class="spec-list">
+                        <div><dt>Slug</dt><dd class="mp-num">@product.Slug</dd></div>
+                        <div><dt>Statut</dt><dd>@StatusLabel(product.Status)</dd></div>
+                        <div><dt>GTIN</dt><dd class="mp-num">@(string.IsNullOrWhiteSpace(product.Gtin) ? "—" : product.Gtin)</dd></div>
+                        <div><dt>EAN</dt><dd class="mp-num">@(string.IsNullOrWhiteSpace(product.Ean) ? "—" : product.Ean)</dd></div>
+                        <div><dt>Photos</dt><dd class="mp-num">@product.Media.Count</dd></div>
+                    </dl>
+                </ChildContent>
+            </MpCard>
+
+            <MpCard Title="Boutique &amp; vendeur">
+                <ChildContent>
+                    @if (seller is null)
+                    {
+                        <p class="mp-caption">Chargement des informations vendeur…</p>
+                    }
+                    else
+                    {
+                        <dl class="spec-list">
+                            <div><dt>Boutique</dt><dd>@seller.ShopName</dd></div>
+                            <div><dt>Statut boutique</dt><dd>@seller.Status</dd></div>
+                            <div><dt>KYB</dt><dd>@seller.KybStatus</dd></div>
+                            <div><dt>Commission</dt><dd class="mp-num">@((seller.CommissionRate * 100).ToString("0.##")) %</dd></div>
+                            <div><dt>Vendeur</dt><dd>@(user?.FullName is { Length: > 0 } fn ? fn : "—")</dd></div>
+                            <div><dt>E-mail</dt><dd>@(user?.Email ?? "—")</dd></div>
+                            <div><dt>Téléphone</dt><dd class="mp-num">@(string.IsNullOrWhiteSpace(user?.PhoneNumber) ? "—" : user!.PhoneNumber)</dd></div>
+                        </dl>
+                    }
+                </ChildContent>
+            </MpCard>
+
+            @if (product.Variants.Count > 0)
+            {
+                <MpCard Title="Variantes" NoPadding="true">
+                    <ChildContent>
+                        <table class="mp-table">
+                            <thead><tr><th>SKU</th><th>Code-barres</th><th class="mp-num">Poids</th></tr></thead>
+                            <tbody>
+                                @foreach (var v in product.Variants)
+                                {
+                                    <tr>
+                                        <td class="mp-num">@v.Sku</td>
+                                        <td class="mp-num">@(string.IsNullOrWhiteSpace(v.Barcode) ? "—" : v.Barcode)</td>
+                                        <td class="mp-num">@v.WeightGrams g</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </ChildContent>
+                </MpCard>
+            }
+
+            @if (product.Tags.Count > 0)
+            {
+                <div class="tag-row">
+                    @foreach (var t in product.Tags) { <span class="tag-chip">@t</span> }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<style>
+    .detail-grid { display: grid; grid-template-columns: 360px 1fr; gap: var(--mp-space-6); align-items: start; }
+    @@media (max-width: 760px) { .detail-grid { grid-template-columns: 1fr; } }
+    .gallery { display: flex; flex-direction: column; gap: var(--mp-space-2); }
+    .detail-photo { width: 100%; height: 320px; object-fit: cover; display: block; background: var(--mp-surface-alt, #eef2f7); }
+    .detail-image { height: 320px; display: flex; align-items: center; justify-content: center; font-size: 120px; background: var(--mp-surface-alt, #eef2f7); }
+    .thumbs { display: flex; gap: var(--mp-space-2); flex-wrap: wrap; }
+    .thumb { position: relative; appearance: none; cursor: pointer; width: 64px; height: 64px; padding: 0; background: none; border: 1px solid var(--mp-border); border-radius: 8px; overflow: hidden; }
+    .thumb.is-active { border-color: var(--mp-primary, #1d4ed8); border-width: 2px; }
+    .thumb-img { width: 100%; height: 100%; object-fit: cover; }
+    .thumb-primary { position: absolute; top: 2px; right: 4px; font-size: 9px; color: var(--mp-primary, #1d4ed8); }
+    .detail-info { display: flex; flex-direction: column; gap: var(--mp-space-3); }
+    .spec-list { display: flex; flex-direction: column; gap: 0; margin: 0; }
+    .spec-list > div { display: flex; justify-content: space-between; gap: var(--mp-space-4); padding: var(--mp-space-3) 0; border-bottom: 0.5px solid var(--mp-border); }
+    .spec-list > div:last-child { border-bottom: 0; }
+    .spec-list dt { color: var(--mp-text-muted, #666); font-size: 14px; }
+    .spec-list dd { margin: 0; font-weight: 500; }
+    .tag-row { display: flex; flex-wrap: wrap; gap: var(--mp-space-2); }
+    .tag-chip { background: var(--mp-surface-alt, #eef2f7); border-radius: 999px; padding: 2px 10px; font-size: 12px; }
+    .ok-msg { color: var(--mp-success, #1a7f37); margin-bottom: var(--mp-space-3); }
+</style>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private AdminProduct? product;
+    private AdminSeller? seller;
+    private AdminUser? user;
+    private bool _loading = true;
+    private int selectedImage;
+    private string? _msg;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        selectedImage = 0; _loading = true; _msg = null;
+        seller = null; user = null;
+        try { product = await Api.GetProductAsync(Id); }
+        catch { product = null; }
+        finally { _loading = false; }
+
+        if (product is not null)
+        {
+            await LoadSellerAndUser(product.SellerId);
+        }
+    }
+
+    private async Task LoadSellerAndUser(Guid sellerId)
+    {
+        try
+        {
+            seller = await Api.GetSellerAsync(sellerId);
+            if (seller is not null && seller.UserId != Guid.Empty)
+            {
+                user = await Api.GetUserAsync(seller.UserId);
+            }
+        }
+        catch { /* infos vendeur non bloquantes */ }
+    }
+
+    private AdminProductMedia? CurrentImage =>
+        product is not null && product.Media.Count > 0
+            ? product.Media[Math.Clamp(selectedImage, 0, product.Media.Count - 1)]
+            : null;
+
+    private async Task Do(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            product = await Api.GetProductAsync(Id);
+            _msg = "Action effectuée.";
+        }
+        catch { /* ignore */ }
+    }
+
+    private static BadgeVariant StatusVariant(string s) => s switch
+    {
+        "Active" => BadgeVariant.Verified,
+        "Archived" => BadgeVariant.Rupture,
+        _ => BadgeVariant.Neutral
+    };
+
+    private static string StatusLabel(string s) => s switch
+    {
+        "Active" => "Publié",
+        "Archived" => "Rejeté / archivé",
+        "Draft" => "En attente",
+        _ => string.IsNullOrWhiteSpace(s) ? "—" : s
+    };
+}
